@@ -1,4 +1,5 @@
 using EmployeeManagement.Api.Entities;
+using EmployeeManagement.Api.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -25,7 +26,7 @@ public class LeaveRequestConfiguration : IEntityTypeConfiguration<LeaveRequest>
         builder.Property(l => l.Status)
             .HasConversion<string>()
             .HasMaxLength(20)
-            .HasDefaultValue("Pending");
+            .HasDefaultValue(LeaveStatus.Pending);
 
         builder.Property(l => l.AppliedOn)
             .HasDefaultValueSql("NOW()");
