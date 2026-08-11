@@ -43,4 +43,6 @@ public class Employee
     public ICollection<LeaveRequest> LeaveRequests { get; set; } = new List<LeaveRequest>();
 
     public ICollection<LeaveRequest> ApprovedLeaveRequests { get; set; } = new List<LeaveRequest>();
+
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

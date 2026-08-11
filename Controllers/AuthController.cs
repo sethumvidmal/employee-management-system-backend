@@ -18,7 +18,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Authenticate a user and return a JWT token.
+    /// Authenticate a user and return access + refresh tokens.
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
@@ -42,5 +42,18 @@ public class AuthController : ControllerBase
     {
         var result = await _authService.RegisterAsync(request);
         return CreatedAtAction(nameof(Register), ApiResponse<LoginResponseDto>.SuccessResponse(result, "Registration successful"));
+    }
+
+    /// <summary>
+    /// Get a new access token using a valid refresh token.
+    /// </summary>
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequestDto request)
+    {
+        var result = await _authService.RefreshTokenAsync(request);
+        return Ok(ApiResponse<LoginResponseDto>.SuccessResponse(result, "Token refreshed successfully"));
     }
 }

@@ -57,11 +57,11 @@ public static class DbSeeder
 
     private static void SeedEmployees(ModelBuilder modelBuilder)
     {
-        // Passwords hashed with BCrypt — matching the seed accounts in README
-        // Admin@123, Manager@123, Employee@123
-        var adminHash = BCrypt.Net.BCrypt.HashPassword("Admin@123");
-        var managerHash = BCrypt.Net.BCrypt.HashPassword("Manager@123");
-        var employeeHash = BCrypt.Net.BCrypt.HashPassword("Employee@123");
+        // Pre-computed BCrypt hashes for seed accounts (static to avoid EF model change warnings)
+        // Passwords: Admin@123, Manager@123, Employee@123
+        const string adminHash = "$2a$11$6aLZeFR7bBhArZJ9CPxMAO6eX2ERB6wmvUl6Vke92uppRWHAn9kLu";
+        const string managerHash = "$2a$11$jvZz8JZoD9OwC6AH/48phuo9ltm9oDOUSb7vyH9sn/s.GlI9eaLCK";
+        const string employeeHash = "$2a$11$k3nb4rYGa31PJLeLGb4Un.KZPZHZORxtHv0DQ6eB50CTja.KFm6w6";
 
         modelBuilder.Entity<Employee>().HasData(
             new Employee
