@@ -2,6 +2,8 @@ using EmployeeManagement.Api.Data;
 using EmployeeManagement.Api.Extensions;
 using EmployeeManagement.Api.Middleware;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,8 +29,46 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
     });
 
-// OpenAPI / Swagger
-builder.Services.AddOpenApi();
+// OpenAPI / Swagger with JWT Bearer support
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
+    {
+        document.Info = new OpenApiInfo
+        {
+            Title = "Employee Management System API",
+            Version = "v1",
+            Description = "Enterprise Employee Management System — Authentication, Employees, Departments, Attendance & Leave Management"
+        };
+
+        // Add JWT Bearer security scheme for Scalar UI
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes.Add("Bearer", new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "Enter your JWT token. Example: eyJhbGciOiJIUzI1NiIs..."
+        });
+
+        document.SecurityRequirements.Add(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                },
+                Array.Empty<string>()
+            }
+        });
+
+        return Task.CompletedTask;
+    });
+});
 
 // CORS
 builder.Services.AddCors(options =>
@@ -55,13 +95,19 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options
+            .WithTitle("EMS API Documentation")
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 }
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 
-// app.UseAuthentication();  // TODO: Uncomment after JWT is wired up
-// app.UseAuthorization();   // TODO: Uncomment after JWT is wired up
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 

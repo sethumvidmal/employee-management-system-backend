@@ -1,13 +1,14 @@
 using EmployeeManagement.Api.DTOs.Department;
 using EmployeeManagement.Api.Helpers;
 using EmployeeManagement.Api.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EmployeeManagement.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-// [Authorize(Roles = "Admin")]  // TODO: Uncomment after JWT is wired up
+[Authorize(Roles = "Admin")]
 public class DepartmentsController : ControllerBase
 {
     private readonly IDepartmentService _departmentService;
