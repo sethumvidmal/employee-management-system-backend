@@ -1,6 +1,6 @@
 # Employee Management System (EMS) — Backend API
 
-Enterprise Employee Management System backend built with **ASP.NET Core 9**, **Entity Framework Core**, and **PostgreSQL**.
+Enterprise Employee Management System backend built with **ASP.NET Core 9**, **Entity Framework Core 9**, and **PostgreSQL**.
 
 ## Prerequisites
 
@@ -19,12 +19,15 @@ cd EmployeeManagement.Api
 
 ### 2. Configure the database
 
-Update `appsettings.json` with your PostgreSQL credentials:
+Create `appsettings.Development.json` (gitignored) with your local credentials:
 
 ```json
 {
   "ConnectionStrings": {
     "DefaultConnection": "Host=localhost;Port=5432;Database=ems_db;Username=postgres;Password=YOUR_PASSWORD"
+  },
+  "JwtSettings": {
+    "SecretKey": "YourSuperSecretKeyThatIsAtLeast32CharactersLong!"
   }
 }
 ```
@@ -47,11 +50,13 @@ dotnet ef database update
 dotnet run
 ```
 
-The API will start at `https://localhost:5001` (or the port defined in `launchSettings.json`).
+The API will start at `http://localhost:5202`.
 
-### 6. Open API documentation
+### 6. Open API Documentation (Scalar UI)
 
-Navigate to the OpenAPI endpoint at `/openapi/v1.json` when running in Development mode.
+Navigate to **http://localhost:5202/scalar/v1** for interactive API docs with built-in JWT authentication.
+
+---
 
 ## Configuration Keys
 
@@ -61,32 +66,67 @@ Navigate to the OpenAPI endpoint at `/openapi/v1.json` when running in Developme
 | `JwtSettings:SecretKey` | Secret key for signing JWT tokens (min 32 chars) |
 | `JwtSettings:Issuer` | JWT issuer claim |
 | `JwtSettings:Audience` | JWT audience claim |
-| `JwtSettings:ExpirationInMinutes` | Token lifetime in minutes |
+| `JwtSettings:ExpirationInMinutes` | Access token lifetime in minutes (default: 60) |
 | `Cors:AllowedOrigins` | Array of allowed frontend origins |
 
 ## Default Seed Accounts
 
 | Role     | Email              | Password     |
-|----------|--------------------|--------------|
+|----------|--------------------|--------------| 
 | Admin    | admin@ems.com      | Admin@123    |
 | Manager  | manager@ems.com    | Manager@123  |
 | Employee | employee@ems.com   | Employee@123 |
 
-## API Modules
+## API Endpoints
 
-- **Auth** — Login, Register (JWT issuance)
-- **Employees** — CRUD with hierarchical manager relationships
-- **Departments** — CRUD management
-- **Attendance** — Check-in/out, queryable history
-- **Leave Requests** — Submit, approve/reject workflow
+### Authentication (`/api/auth`)
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| POST | `/api/auth/login` | Public | Login and receive access + refresh tokens |
+| POST | `/api/auth/register` | Admin | Register a new employee |
+| POST | `/api/auth/refresh` | Public | Get new access token using refresh token |
+
+### Employees (`/api/employees`)
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| GET | `/api/employees` | Admin, Manager | List all employees |
+| GET | `/api/employees/{id}` | Admin, Manager, Self | Get employee by ID |
+| POST | `/api/employees` | Admin | Create employee |
+| PUT | `/api/employees/{id}` | Admin | Update employee |
+| DELETE | `/api/employees/{id}` | Admin | Soft-delete employee |
+
+### Departments (`/api/departments`)
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| GET | `/api/departments` | Admin | List all departments |
+| GET | `/api/departments/{id}` | Admin | Get department by ID |
+| POST | `/api/departments` | Admin | Create department |
+| PUT | `/api/departments/{id}` | Admin | Update department |
+| DELETE | `/api/departments/{id}` | Admin | Soft-delete department |
+
+### Attendance (`/api/attendance`)
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| POST | `/api/attendance/check-in` | All Authenticated | Check in (1 per day) |
+| PUT | `/api/attendance/check-out` | All Authenticated | Check out |
+| GET | `/api/attendance` | All (Employees see own only) | Query by employee, dept, date range |
+
+### Leave Requests (`/api/leave-requests`)
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| POST | `/api/leave-requests` | All Authenticated | Submit leave request |
+| PUT | `/api/leave-requests/{id}/approve` | Admin, Manager | Approve or reject |
+| GET | `/api/leave-requests` | All (Employees see own only) | List leave requests |
+| GET | `/api/leave-requests/{id}` | All Authenticated | Get by ID |
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| Framework | .NET 9 / ASP.NET Core |
+| Framework | .NET 9 / ASP.NET Core Web API |
 | Database | PostgreSQL |
-| ORM | Entity Framework Core 9 |
-| Auth | JWT + BCrypt |
+| ORM | Entity Framework Core 9 (Npgsql) |
+| Auth | JWT Bearer + BCrypt + Refresh Tokens |
 | Validation | FluentValidation |
-| Docs | OpenAPI / Scalar |
+| Docs | Scalar (OpenAPI) |
+| API Responses | Standardized `ApiResponse<T>` wrapper |
