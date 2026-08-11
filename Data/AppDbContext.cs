@@ -20,5 +20,8 @@ public class AppDbContext : DbContext
 
         // Apply all IEntityTypeConfiguration<T> from the current assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        // Seed default data (departments + accounts)
+        DbSeeder.Seed(modelBuilder);
     }
 }
