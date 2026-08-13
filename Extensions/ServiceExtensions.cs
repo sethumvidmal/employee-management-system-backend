@@ -1,3 +1,4 @@
+using EmployeeManagement.Api.Helpers;
 using EmployeeManagement.Api.Services;
 using EmployeeManagement.Api.Services.Interfaces;
 using FluentValidation;
@@ -10,8 +11,15 @@ namespace EmployeeManagement.Api.Extensions;
 /// </summary>
 public static class ServiceExtensions
 {
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
     {
+        // Work timezone — decides what "today" means for calendar-based records
+        var workTimeSettings = configuration.GetSection(WorkTimeSettings.SectionName).Get<WorkTimeSettings>()
+            ?? new WorkTimeSettings();
+
+        services.AddSingleton(workTimeSettings);
+        services.AddSingleton<WorkClock>();
+
         // Business services
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IEmployeeService, EmployeeService>();

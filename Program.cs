@@ -19,7 +19,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
 // Application services (DI registrations)
-builder.Services.AddApplicationServices();
+builder.Services.AddApplicationServices(builder.Configuration);
 
 // Controllers + JSON options
 builder.Services.AddControllers()

@@ -2,6 +2,7 @@ using EmployeeManagement.Api.Data;
 using EmployeeManagement.Api.DTOs.Attendance;
 using EmployeeManagement.Api.Entities;
 using EmployeeManagement.Api.Enums;
+using EmployeeManagement.Api.Helpers;
 using EmployeeManagement.Api.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,11 +11,13 @@ namespace EmployeeManagement.Api.Services;
 public class AttendanceService : IAttendanceService
 {
     private readonly AppDbContext _context;
+    private readonly WorkClock _clock;
     private readonly ILogger<AttendanceService> _logger;
 
-    public AttendanceService(AppDbContext context, ILogger<AttendanceService> logger)
+    public AttendanceService(AppDbContext context, WorkClock clock, ILogger<AttendanceService> logger)
     {
         _context = context;
+        _clock = clock;
         _logger = logger;
     }
 
@@ -27,8 +30,11 @@ public class AttendanceService : IAttendanceService
             throw new KeyNotFoundException($"Employee with ID '{employeeId}' not found or inactive");
         }
 
-        // Prevent duplicate check-in for the same day
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // Prevent duplicate check-in for the same day.
+        // "Today" is resolved in the organisation's local timezone, not UTC — an
+        // early-morning check-in must not be attributed to the previous work date.
+        var checkInTime = _clock.UtcNow;
+        var today = _clock.ToWorkDate(checkInTime);
         var alreadyCheckedIn = await _context.AttendanceLogs
             .AnyAsync(a => a.EmployeeId == employeeId && a.WorkDate == today);
 
@@ -46,7 +52,7 @@ public class AttendanceService : IAttendanceService
         var attendanceLog = new AttendanceLog
         {
             EmployeeId = employeeId,
-            CheckInTime = DateTimeOffset.UtcNow,
+            CheckInTime = checkInTime,
             WorkDate = today,
             Status = AttendanceStatus.Present,
             DeviceType = deviceType
@@ -88,7 +94,7 @@ public class AttendanceService : IAttendanceService
             throw new InvalidOperationException("You have already checked out for this record");
         }
 
-        attendanceLog.CheckOutTime = DateTimeOffset.UtcNow;
+        attendanceLog.CheckOutTime = _clock.UtcNow;
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Employee {EmployeeCode} checked out at {Time}",
