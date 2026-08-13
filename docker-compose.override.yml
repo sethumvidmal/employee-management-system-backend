@@ -1,0 +1,22 @@
+# ─────────────────────────────────────────────────────
+# Development overrides – merged automatically when you
+# run  docker compose up  (without --file flag).
+#
+# These settings are intentionally NOT suitable for
+# production (Development environment, Scalar UI open).
+# ─────────────────────────────────────────────────────
+
+services:
+
+  db:
+    ports:
+      - "5432:5432"   # expose Postgres directly for local tools (TablePlus, DBeaver)
+
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    # Hot-reload is not available inside Docker, but mounting source lets you
+    # rebuild quickly: docker compose build api && docker compose up -d api
+    # Uncomment the line below to expose the Scalar docs port separately:
+    # ports:
+    #   - "5202:8080"
