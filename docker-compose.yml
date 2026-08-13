@@ -18,6 +18,10 @@ services:
       POSTGRES_USER:     ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       PGDATA:            /var/lib/postgresql/data/pgdata
+    ports:
+      # Bind to loopback only — reachable from this host (psql/pgAdmin),
+      # never from the network or internet. Do NOT change to 0.0.0.0.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
