@@ -67,7 +67,12 @@ Navigate to **http://localhost:5202/scalar/v1** for interactive API docs with bu
 | `JwtSettings:Issuer` | JWT issuer claim |
 | `JwtSettings:Audience` | JWT audience claim |
 | `JwtSettings:ExpirationInMinutes` | Access token lifetime in minutes (default: 60) |
+| `WorkTime:TimeZoneId` | Organisation's local timezone, e.g. `Asia/Colombo` (default). Determines what "today" means for attendance work dates |
 | `Cors:AllowedOrigins` | Array of allowed frontend origins |
+
+### Time handling
+
+Timestamps (`checkInTime`, `createdAt`, `appliedOn`, …) are absolute instants and are always stored in **UTC**. Calendar dates (`workDate`) are wall-calendar values and are resolved in the **organisation's local timezone** via `WorkTime:TimeZoneId`, because "today" is a local concept — at 05:00 in Asia/Colombo (UTC+5:30) the UTC date is still the previous day. An unrecognised timezone ID logs an error and falls back to UTC, so confirm the `Work timezone resolved: …` line in the startup log.
 
 ## Default Seed Accounts
 
