@@ -86,6 +86,26 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // ──────────────────────────────────────────────
+// Auto-migrate on startup (supports Docker deployments)
+// ──────────────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        logger.LogInformation("Applying pending database migrations…");
+        await db.Database.MigrateAsync();
+        logger.LogInformation("Database migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "An error occurred while applying database migrations.");
+        throw;
+    }
+}
+
+// ──────────────────────────────────────────────
 // Middleware Pipeline
 // ──────────────────────────────────────────────
 
