@@ -1,6 +1,9 @@
 using EmployeeManagement.Api.Data;
 using EmployeeManagement.Api.Extensions;
+using EmployeeManagement.Api.Helpers;
 using EmployeeManagement.Api.Middleware;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
@@ -11,9 +14,18 @@ var builder = WebApplication.CreateBuilder(args);
 // Services
 // ──────────────────────────────────────────────
 
-// Database
+// Database (MariaDB via Pomelo). The server version is set explicitly rather than auto-detected
+// so startup and `dotnet ef` never need a live connection just to pick the SQL dialect.
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
+var serverVersion = ServerVersion.Parse(builder.Configuration["Database:ServerVersion"] ?? "10.6.0-mariadb");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseMySql(connectionString, serverVersion, mySqlOptions =>
+        mySqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorNumbersToAdd: null)));
 
 // Authentication & Authorization
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -27,7 +39,30 @@ builder.Services.AddControllers()
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+    })
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // Return validation failures in the standard ApiResponse shape instead of ProblemDetails
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage)
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .ToList();
+
+            return new BadRequestObjectResult(
+                ApiResponse<object>.FailResponse("Validation failed", errors, AuthErrorCodes.ValidationFailed));
+        };
     });
+
+// Reverse proxy (nginx) support — trust X-Forwarded-For / X-Forwarded-Proto from localhost
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+});
+
+builder.Services.AddHealthChecks();
 
 // OpenAPI / Swagger with JWT Bearer support
 builder.Services.AddOpenApi(options =>
@@ -109,7 +144,10 @@ using (var scope = app.Services.CreateScope())
 // Middleware Pipeline
 // ──────────────────────────────────────────────
 
-// Global exception handling (first in pipeline)
+// Must run before anything that reads scheme / remote IP
+app.UseForwardedHeaders();
+
+// Global exception handling
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -130,5 +168,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();

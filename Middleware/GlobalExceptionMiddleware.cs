@@ -24,6 +24,12 @@ public class GlobalExceptionMiddleware
         {
             await _next(context);
         }
+        catch (AuthException ex)
+        {
+            // Expected client errors (bad password, expired refresh token…) — no stack trace needed
+            _logger.LogInformation("Auth failure {ErrorCode}: {Message}", ex.ErrorCode, ex.Message);
+            await HandleExceptionAsync(context, ex);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "An unhandled exception occurred: {Message}", ex.Message);
@@ -35,18 +41,19 @@ public class GlobalExceptionMiddleware
     {
         context.Response.ContentType = "application/json";
 
-        var (statusCode, message) = exception switch
+        var (statusCode, message, errorCode) = exception switch
         {
-            KeyNotFoundException => (HttpStatusCode.NotFound, exception.Message),
-            UnauthorizedAccessException => (HttpStatusCode.Unauthorized, exception.Message),
-            InvalidOperationException => (HttpStatusCode.Conflict, exception.Message),
-            ArgumentException => (HttpStatusCode.BadRequest, exception.Message),
-            _ => (HttpStatusCode.InternalServerError, "An unexpected error occurred. Please try again later.")
+            AuthException auth => ((HttpStatusCode)auth.StatusCode, auth.Message, auth.ErrorCode),
+            KeyNotFoundException => (HttpStatusCode.NotFound, exception.Message, "NOT_FOUND"),
+            UnauthorizedAccessException => (HttpStatusCode.Unauthorized, exception.Message, AuthErrorCodes.TokenInvalid),
+            InvalidOperationException => (HttpStatusCode.Conflict, exception.Message, "CONFLICT"),
+            ArgumentException => (HttpStatusCode.BadRequest, exception.Message, "BAD_REQUEST"),
+            _ => (HttpStatusCode.InternalServerError, "An unexpected error occurred. Please try again later.", "INTERNAL_ERROR")
         };
 
         context.Response.StatusCode = (int)statusCode;
 
-        var response = ApiResponse<object>.FailResponse(message);
+        var response = ApiResponse<object>.FailResponse(message, errorCode: errorCode);
 
         var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         var json = JsonSerializer.Serialize(response, jsonOptions);

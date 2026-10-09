@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Enterprise Employee Management System backend built with **ASP.NET Core 9 Web API** and **PostgreSQL**. This API serves as the backbone for a web (React) and mobile (React Native/Flutter) frontend, covering employee identity, attendance tracking, and leave management.
+Enterprise Employee Management System backend built with **ASP.NET Core 9 Web API** and **MariaDB**. This API serves as the backbone for a web (React) and mobile (React Native/Flutter) frontend, covering employee identity, attendance tracking, and leave management.
 
 ---
 
@@ -22,8 +22,8 @@ Enterprise Employee Management System backend built with **ASP.NET Core 9 Web AP
 | Concern              | Technology                                      |
 |----------------------|-------------------------------------------------|
 | Framework            | .NET 9 / ASP.NET Core Web API                   |
-| Database             | PostgreSQL                                       |
-| ORM                  | Entity Framework Core 9 (Npgsql provider)        |
+| Database             | MariaDB 10.6+                                    |
+| ORM                  | Entity Framework Core 9 (Pomelo MySQL provider)  |
 | Authentication       | JWT Bearer Tokens                                |
 | Authorization        | Role-Based Access Control (Admin, Manager, Employee) |
 | Password Hashing     | BCrypt.Net                                       |
@@ -227,7 +227,7 @@ EmployeeManagement.Api/
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=ems_db;Username=postgres;Password=..."
+    "DefaultConnection": "Server=localhost;Port=3306;Database=ems_db;User=ems_user;Password=..."
   },
   "JwtSettings": {
     "SecretKey": "...",

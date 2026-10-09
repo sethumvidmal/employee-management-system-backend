@@ -19,6 +19,9 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // Full Unicode (incl. emoji) for every table/column on MariaDB
+        modelBuilder.HasCharSet("utf8mb4");
+
         // Apply all IEntityTypeConfiguration<T> from the current assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 

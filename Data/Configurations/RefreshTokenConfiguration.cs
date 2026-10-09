@@ -12,9 +12,6 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 
         builder.HasKey(r => r.Id);
 
-        builder.Property(r => r.Id)
-            .HasDefaultValueSql("gen_random_uuid()");
-
         builder.Property(r => r.Token)
             .IsRequired()
             .HasMaxLength(256);

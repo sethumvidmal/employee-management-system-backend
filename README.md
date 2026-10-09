@@ -1,12 +1,14 @@
 # Employee Management System (EMS) — Backend API
 
-Enterprise Employee Management System backend built with **ASP.NET Core 9**, **Entity Framework Core 9**, and **PostgreSQL**.
+Enterprise Employee Management System backend built with **ASP.NET Core 9**, **Entity Framework Core 9**, and **MariaDB**.
+
+For production hosting on Ubuntu (with an existing MariaDB server) see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 ## Prerequisites
 
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
-- [PostgreSQL](https://www.postgresql.org/download/) (v14+)
-- A PostgreSQL database named `ems_db`
+- [MariaDB](https://mariadb.org/download/) (10.6+)
+- A MariaDB database named `ems_db` (`CREATE DATABASE ems_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`)
 
 ## Getting Started
 
@@ -24,7 +26,10 @@ Create `appsettings.Development.json` (gitignored) with your local credentials:
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=ems_db;Username=postgres;Password=YOUR_PASSWORD"
+    "DefaultConnection": "Server=localhost;Port=3306;Database=ems_db;User=root;Password=YOUR_PASSWORD"
+  },
+  "Database": {
+    "ServerVersion": "10.11.0-mariadb"
   },
   "JwtSettings": {
     "SecretKey": "YourSuperSecretKeyThatIsAtLeast32CharactersLong!"
@@ -62,7 +67,8 @@ Navigate to **http://localhost:5202/scalar/v1** for interactive API docs with bu
 
 | Key | Description |
 |-----|-------------|
-| `ConnectionStrings:DefaultConnection` | PostgreSQL connection string |
+| `ConnectionStrings:DefaultConnection` | MariaDB connection string |
+| `Database:ServerVersion` | MariaDB server version, e.g. `10.11.0-mariadb` (default `10.6.0-mariadb`) |
 | `JwtSettings:SecretKey` | Secret key for signing JWT tokens (min 32 chars) |
 | `JwtSettings:Issuer` | JWT issuer claim |
 | `JwtSettings:Audience` | JWT audience claim |
@@ -89,7 +95,50 @@ Timestamps (`checkInTime`, `createdAt`, `appliedOn`, …) are absolute instants 
 |--------|----------|--------|-------------|
 | POST | `/api/auth/login` | Public | Login and receive access + refresh tokens |
 | POST | `/api/auth/register` | Admin | Register a new employee |
-| POST | `/api/auth/refresh` | Public | Get new access token using refresh token |
+| POST | `/api/auth/refresh` | Public | Get new access token using refresh token (rotates the refresh token) |
+| POST | `/api/auth/logout` | Public (refresh token in body) | Revoke the current session's refresh token |
+| POST | `/api/auth/logout-all` | All Authenticated | Revoke all of the user's refresh tokens (log out everywhere) |
+
+#### Auth responses
+
+Login, register and refresh return:
+
+```json
+{
+  "success": true,
+  "message": "Welcome back, System Admin",
+  "data": {
+    "employeeId": "d4e5f6a7-b8c9-0123-def0-1234567890ab",
+    "employeeCode": "EMP001",
+    "email": "admin@ems.com",
+    "fullName": "System Admin",
+    "role": "Admin",
+    "tokenType": "Bearer",
+    "accessToken": "eyJhbGciOi...",
+    "expiresAt": "2026-10-09T10:00:00Z",
+    "expiresIn": 3600,
+    "refreshToken": "q1w2e3...",
+    "refreshTokenExpiresAt": "2026-10-16T09:00:00Z"
+  },
+  "errors": []
+}
+```
+
+Failures use the same envelope with `success: false` and a machine-readable `errorCode`:
+
+| Status | `errorCode` | When | Client action |
+|--------|-------------|------|---------------|
+| 400 | `VALIDATION_FAILED` | Request body failed validation (details in `errors`) | Show errors |
+| 401 | `INVALID_CREDENTIALS` | Wrong email or password | Show error |
+| 403 | `ACCOUNT_DEACTIVATED` | Correct password but the account is deactivated | Show error |
+| 401 | `TOKEN_MISSING` | No `Authorization: Bearer` header on a protected endpoint | Redirect to login |
+| 401 | `TOKEN_EXPIRED` | Access token expired | Call `/api/auth/refresh`, then retry |
+| 401 | `TOKEN_INVALID` | Malformed or tampered access token | Redirect to login |
+| 403 | `FORBIDDEN` | Authenticated but the role is not allowed | Show "no permission" |
+| 401 | `REFRESH_TOKEN_INVALID` / `REFRESH_TOKEN_EXPIRED` / `REFRESH_TOKEN_REVOKED` | Refresh failed | Redirect to login |
+
+Logout is stateless for access tokens. After `/logout`, the client must delete its stored access
+token. It remains technically valid until `expiresAt`, but it can no longer be refreshed.
 
 ### Employees (`/api/employees`)
 | Method | Endpoint | Access | Description |
@@ -129,8 +178,8 @@ Timestamps (`checkInTime`, `createdAt`, `appliedOn`, …) are absolute instants 
 | Component | Technology |
 |-----------|-----------|
 | Framework | .NET 9 / ASP.NET Core Web API |
-| Database | PostgreSQL |
-| ORM | Entity Framework Core 9 (Npgsql) |
+| Database | MariaDB |
+| ORM | Entity Framework Core 9 (Pomelo MySQL provider) |
 | Auth | JWT Bearer + BCrypt + Refresh Tokens |
 | Validation | FluentValidation |
 | Docs | Scalar (OpenAPI) |

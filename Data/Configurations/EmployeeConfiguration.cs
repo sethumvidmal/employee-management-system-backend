@@ -12,9 +12,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 
         builder.HasKey(e => e.Id);
 
-        builder.Property(e => e.Id)
-            .HasDefaultValueSql("gen_random_uuid()");
-
         builder.Property(e => e.EmployeeCode)
             .IsRequired()
             .HasMaxLength(20);
@@ -45,7 +42,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
             .HasDefaultValue(true);
 
         builder.Property(e => e.CreatedAt)
-            .HasDefaultValueSql("NOW()");
+            .HasDefaultValueSql("CURRENT_TIMESTAMP(6)");
 
         // Indexes
         builder.HasIndex(e => e.EmployeeCode).IsUnique();

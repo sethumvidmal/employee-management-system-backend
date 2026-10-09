@@ -12,9 +12,6 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
 
         builder.HasKey(d => d.Id);
 
-        builder.Property(d => d.Id)
-            .HasDefaultValueSql("gen_random_uuid()");
-
         builder.Property(d => d.Name)
             .IsRequired()
             .HasMaxLength(100);
@@ -26,7 +23,7 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
             .HasDefaultValue(true);
 
         builder.Property(d => d.CreatedAt)
-            .HasDefaultValueSql("NOW()");
+            .HasDefaultValueSql("CURRENT_TIMESTAMP(6)");
 
         builder.HasIndex(d => d.Name)
             .IsUnique();

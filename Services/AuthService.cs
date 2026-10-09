@@ -17,6 +17,10 @@ public class AuthService : IAuthService
 
     private const int RefreshTokenExpiryDays = 7;
 
+    // Verified against when the email is unknown so both failure paths take the same time
+    // (prevents discovering valid emails by measuring response time).
+    private static readonly string DummyPasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString());
+
     public AuthService(AppDbContext context, JwtHelper jwtHelper, ILogger<AuthService> logger)
     {
         _context = context;
@@ -26,35 +30,39 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponseDto> LoginAsync(LoginRequestDto request)
     {
+        var email = request.Email.Trim();
+
         var employee = await _context.Employees
-            .FirstOrDefaultAsync(e => e.Email == request.Email && e.IsActive);
+            .FirstOrDefaultAsync(e => e.Email == email);
 
         if (employee is null)
         {
-            _logger.LogWarning("Login failed: no active account found for {Email}", request.Email);
-            throw new UnauthorizedAccessException("Invalid email or password");
+            BCrypt.Net.BCrypt.Verify(request.Password, DummyPasswordHash);
+            _logger.LogWarning("Login failed: no account found for {Email}", email);
+            throw new AuthException("Invalid email or password", AuthErrorCodes.InvalidCredentials);
         }
 
         if (!BCrypt.Net.BCrypt.Verify(request.Password, employee.PasswordHash))
         {
-            _logger.LogWarning("Login failed: incorrect password for {Email}", request.Email);
-            throw new UnauthorizedAccessException("Invalid email or password");
+            _logger.LogWarning("Login failed: incorrect password for {Email}", email);
+            throw new AuthException("Invalid email or password", AuthErrorCodes.InvalidCredentials);
         }
 
-        var accessToken = _jwtHelper.GenerateToken(employee);
-        var refreshToken = await CreateRefreshTokenAsync(employee.Id);
-
-        _logger.LogInformation("User {Email} logged in successfully", request.Email);
-
-        return new LoginResponseDto
+        // Only revealed after the correct password was supplied, so it does not leak account existence.
+        if (!employee.IsActive)
         {
-            AccessToken = accessToken,
-            RefreshToken = refreshToken.Token,
-            Email = employee.Email,
-            FullName = $"{employee.FirstName} {employee.LastName}",
-            Role = employee.Role.ToString(),
-            ExpiresAt = _jwtHelper.GetExpiration()
-        };
+            _logger.LogWarning("Login blocked: account {Email} is deactivated", email);
+            throw new AuthException(
+                "Your account has been deactivated. Please contact an administrator.",
+                AuthErrorCodes.AccountDeactivated,
+                StatusCodes.Status403Forbidden);
+        }
+
+        var response = await IssueTokensAsync(employee);
+
+        _logger.LogInformation("User {Email} logged in successfully", email);
+
+        return response;
     }
 
     public async Task<LoginResponseDto> RegisterAsync(RegisterRequestDto request)
@@ -113,21 +121,12 @@ public class AuthService : IAuthService
         _context.Employees.Add(employee);
         await _context.SaveChangesAsync();
 
-        var accessToken = _jwtHelper.GenerateToken(employee);
-        var refreshToken = await CreateRefreshTokenAsync(employee.Id);
+        var response = await IssueTokensAsync(employee);
 
         _logger.LogInformation("New employee registered: {EmployeeCode} - {Email} as {Role}",
             employee.EmployeeCode, employee.Email, employee.Role);
 
-        return new LoginResponseDto
-        {
-            AccessToken = accessToken,
-            RefreshToken = refreshToken.Token,
-            Email = employee.Email,
-            FullName = $"{employee.FirstName} {employee.LastName}",
-            Role = employee.Role.ToString(),
-            ExpiresAt = _jwtHelper.GetExpiration()
-        };
+        return response;
     }
 
     public async Task<LoginResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request)
@@ -138,41 +137,103 @@ public class AuthService : IAuthService
 
         if (storedToken is null)
         {
-            throw new UnauthorizedAccessException("Invalid refresh token");
-        }
-
-        if (storedToken.IsExpired)
-        {
-            throw new UnauthorizedAccessException("Refresh token has expired. Please login again");
+            throw new AuthException("Invalid refresh token. Please login again.", AuthErrorCodes.RefreshTokenInvalid);
         }
 
         if (storedToken.IsRevoked)
         {
-            throw new UnauthorizedAccessException("Refresh token has been revoked");
+            throw new AuthException("Refresh token has been revoked. Please login again.", AuthErrorCodes.RefreshTokenRevoked);
+        }
+
+        if (storedToken.IsExpired)
+        {
+            throw new AuthException("Refresh token has expired. Please login again.", AuthErrorCodes.RefreshTokenExpired);
         }
 
         if (!storedToken.Employee.IsActive)
         {
-            throw new UnauthorizedAccessException("Account is deactivated");
+            storedToken.RevokedAt = DateTimeOffset.UtcNow;
+            await _context.SaveChangesAsync();
+
+            throw new AuthException(
+                "Your account has been deactivated. Please contact an administrator.",
+                AuthErrorCodes.AccountDeactivated,
+                StatusCodes.Status403Forbidden);
         }
 
-        // Revoke the old refresh token (token rotation)
+        // Revoke the old refresh token (token rotation) — saved together with the new one
         storedToken.RevokedAt = DateTimeOffset.UtcNow;
 
-        // Issue new tokens
-        var accessToken = _jwtHelper.GenerateToken(storedToken.Employee);
-        var newRefreshToken = await CreateRefreshTokenAsync(storedToken.EmployeeId);
+        var response = await IssueTokensAsync(storedToken.Employee);
 
         _logger.LogInformation("Token refreshed for {Email}", storedToken.Employee.Email);
 
+        return response;
+    }
+
+    public async Task<LogoutResponseDto> LogoutAsync(LogoutRequestDto request)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        var storedToken = await _context.RefreshTokens
+            .FirstOrDefaultAsync(rt => rt.Token == request.RefreshToken);
+
+        // Logout is idempotent: an unknown or already-revoked token still results in a logged-out client.
+        if (storedToken is null || storedToken.IsRevoked)
+        {
+            return new LogoutResponseDto { RevokedSessions = 0, LoggedOutAt = now.UtcDateTime };
+        }
+
+        storedToken.RevokedAt = now;
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Employee {EmployeeId} logged out", storedToken.EmployeeId);
+
+        return new LogoutResponseDto { RevokedSessions = 1, LoggedOutAt = now.UtcDateTime };
+    }
+
+    public async Task<LogoutResponseDto> LogoutAllAsync(Guid employeeId)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        var activeTokens = await _context.RefreshTokens
+            .Where(rt => rt.EmployeeId == employeeId && rt.RevokedAt == null && rt.ExpiresAt > now)
+            .ToListAsync();
+
+        foreach (var token in activeTokens)
+        {
+            token.RevokedAt = now;
+        }
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Employee {EmployeeId} logged out of all sessions ({Count} revoked)",
+            employeeId, activeTokens.Count);
+
+        return new LogoutResponseDto { RevokedSessions = activeTokens.Count, LoggedOutAt = now.UtcDateTime };
+    }
+
+    /// <summary>
+    /// Create an access token + persisted refresh token and build the auth response.
+    /// </summary>
+    private async Task<LoginResponseDto> IssueTokensAsync(Employee employee)
+    {
+        var (accessToken, accessTokenExpiresAt) = _jwtHelper.GenerateToken(employee);
+        var refreshToken = await CreateRefreshTokenAsync(employee.Id);
+
         return new LoginResponseDto
         {
+            EmployeeId = employee.Id,
+            EmployeeCode = employee.EmployeeCode,
+            Email = employee.Email,
+            FullName = $"{employee.FirstName} {employee.LastName}",
+            Role = employee.Role.ToString(),
+            TokenType = "Bearer",
             AccessToken = accessToken,
-            RefreshToken = newRefreshToken.Token,
-            Email = storedToken.Employee.Email,
-            FullName = $"{storedToken.Employee.FirstName} {storedToken.Employee.LastName}",
-            Role = storedToken.Employee.Role.ToString(),
-            ExpiresAt = _jwtHelper.GetExpiration()
+            ExpiresAt = accessTokenExpiresAt,
+            ExpiresIn = _jwtHelper.ExpirationInSeconds,
+            RefreshToken = refreshToken.Token,
+            RefreshTokenExpiresAt = refreshToken.ExpiresAt.UtcDateTime
         };
     }
 

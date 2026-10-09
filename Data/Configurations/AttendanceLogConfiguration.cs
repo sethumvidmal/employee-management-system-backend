@@ -12,9 +12,6 @@ public class AttendanceLogConfiguration : IEntityTypeConfiguration<AttendanceLog
 
         builder.HasKey(a => a.Id);
 
-        builder.Property(a => a.Id)
-            .HasDefaultValueSql("gen_random_uuid()");
-
         builder.Property(a => a.Status)
             .HasConversion<string>()
             .HasMaxLength(20);

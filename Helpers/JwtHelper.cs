@@ -18,14 +18,18 @@ public class JwtHelper
         _settings = settings;
     }
 
+    public int ExpirationInSeconds => _settings.ExpirationInMinutes * 60;
+
     /// <summary>
     /// Generate a signed JWT for the given employee.
     /// Claims: sub (employee ID), email, role, full name.
+    /// Returns the token together with its exact expiry so responses match the "exp" claim.
     /// </summary>
-    public string GenerateToken(Employee employee)
+    public (string Token, DateTime ExpiresAt) GenerateToken(Employee employee)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SecretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var expiresAt = DateTime.UtcNow.AddMinutes(_settings.ExpirationInMinutes);
 
         var claims = new List<Claim>
         {
@@ -40,16 +44,10 @@ public class JwtHelper
             issuer: _settings.Issuer,
             audience: _settings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_settings.ExpirationInMinutes),
+            expires: expiresAt,
             signingCredentials: credentials
         );
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return (new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
     }
-
-    /// <summary>
-    /// Calculate the token expiration DateTime.
-    /// </summary>
-    public DateTime GetExpiration() =>
-        DateTime.UtcNow.AddMinutes(_settings.ExpirationInMinutes);
 }
