@@ -53,8 +53,13 @@ public class WorkClock
         try
         {
             var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-            logger.LogInformation("Work timezone resolved: {TimeZoneId} (UTC{Offset:+hh\\:mm;-hh\\:mm;+00\\:00})",
-                timeZoneId, zone.BaseUtcOffset);
+
+            // TimeSpan custom formats have no sign or ";" sections, so build "+05:30" by hand
+            var offset = zone.BaseUtcOffset;
+            var formattedOffset = $"{(offset < TimeSpan.Zero ? "-" : "+")}{offset.Duration():hh\\:mm}";
+
+            logger.LogInformation("Work timezone resolved: {TimeZoneId} (UTC{Offset})",
+                timeZoneId, formattedOffset);
             return zone;
         }
         catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
