@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────
+# Employee Management System – Docker Compose (API only)
+# ─────────────────────────────────────────────────────
+# The database is NOT containerised: the API connects to the
+# MariaDB server already installed on the Ubuntu host.
+#
+# Usage (see DEPLOYMENT.md for the full guide):
+#   1. Copy .env.example to .env and fill in secrets
+#   2. docker compose up -d --build
+# ─────────────────────────────────────────────────────
+
+services:
+
+  # ── ASP.NET Core API ────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ems-api:latest
+    container_name: ems_api
+    restart: unless-stopped
+    # Host networking: the container shares the host's network stack, so
+    # MariaDB on 127.0.0.1:3306 is reachable without changing MariaDB's
+    # bind-address or exposing the database to the network.
+    # The API listens directly on API_BIND_ADDRESS:API_PORT on the host.
+    network_mode: host
+    environment:
+      ASPNETCORE_ENVIRONMENT:                   ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS:                          http://${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8080}
+      ConnectionStrings__DefaultConnection:     "Server=${DB_HOST:-127.0.0.1};Port=${DB_PORT:-3306};Database=${DB_NAME:-ems_db};User=${DB_USER:-ems_user};Password=${DB_PASSWORD}"
+      Database__ServerVersion:                  ${DB_SERVER_VERSION:-10.6.0-mariadb}
+      JwtSettings__SecretKey:                   ${JWT_SECRET_KEY}
+      JwtSettings__Issuer:                      ${JWT_ISSUER:-EmployeeManagement.Api}
+      JwtSettings__Audience:                    ${JWT_AUDIENCE:-EmployeeManagement.Client}
+      JwtSettings__ExpirationInMinutes:         ${JWT_EXPIRATION_MINUTES:-60}
+      Cors__AllowedOrigins__0:                  ${CORS_ORIGIN_0:-http://localhost:3000}
+      Cors__AllowedOrigins__1:                  ${CORS_ORIGIN_1:-http://localhost:5173}
+      Cors__AllowedOrigins__2:                  ${CORS_ORIGIN_2:-https://employee-management-syst-1ce7e.web.app}
+      Cors__AllowedOrigins__3:                  ${CORS_ORIGIN_3:-https://employee-management-syst-1ce7e.firebaseapp.com}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

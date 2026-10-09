@@ -1,0 +1,36 @@
+# ─────────────────────────────────────────────────────
+# Files excluded from the Docker build context.
+# Keeps the image small and avoids leaking secrets.
+# ─────────────────────────────────────────────────────
+
+# Build outputs
+[Bb]in/
+[Oo]bj/
+
+# IDE / OS junk
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker files themselves (not needed inside the image)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Secrets — never bake these into the image
+.env
+
+# Dev tools
+dotnet-tools.json
+*.http
+
+# Docs
+README.md
